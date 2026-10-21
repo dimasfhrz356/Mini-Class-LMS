@@ -219,16 +219,27 @@ function buildNav() {
 }
 
 // Admin approval UI (owner only). Accessible from login page via button.
-async function showAdminPanel() {
-  const token = prompt('Masukkan OWNER TOKEN untuk akses admin:');
-  if (!token) return toast('Token diperlukan');
-  ownerToken = token;
-  localStorage.setItem('ruangKelasOwnerToken', ownerToken);
+// Dosen yang sudah login memakai sesinya; selain itu diminta OWNER TOKEN.
+function isLecturerSession() {
+  return user.role === 'dosen' && !!sessionStorage.getItem('ruangKelasAuthToken');
+}
 
-  if (!window.isBackendReady) return toast('Server tidak tersedia');
+function adminHeaders() {
+  return isLecturerSession() ? {} : { 'x-owner-token': ownerToken };
+}
+
+async function showAdminPanel() {
+  if (!isLecturerSession()) {
+    const token = prompt('Masukkan OWNER TOKEN untuk akses admin:');
+    if (!token) return toast('Token diperlukan');
+    ownerToken = token;
+    localStorage.setItem('ruangKelasOwnerToken', ownerToken);
+  }
+
+  if (!(await waitForBackend())) return toast('Server tidak tersedia');
 
   try {
-    const list = await apiRequest('/pending-registrations', { headers: { 'x-owner-token': ownerToken } });
+    const list = await apiRequest('/pending-registrations', { headers: adminHeaders() });
     openModal(`<div class="modal-head"><h3>Daftar Pendaftar (Pending)</h3><button class="close" onclick="closeModal()">✕</button></div><div id="pendingList">${list.length ? list.map((p) => `<div style="padding:8px;border-bottom:1px solid #eee"><b>${esc(p.nama)}</b> — ${esc(p.nim)}<br>${esc(p.email)}<div style="margin-top:6px"><button class="btn small" onclick="approve(${p.id})">Setujui</button></div></div>`).join('') : '<p>Tidak ada pendaftar.'}</div>
       <h3 style="margin-top:18px">Tambah Akun Dosen</h3>
       <form id="ownerDosenForm" class="auth-form">
@@ -249,7 +260,7 @@ async function addDosenAsOwner(event) {
   try {
     await apiRequest('/dosen', {
       method: 'POST',
-      headers: { 'x-owner-token': ownerToken },
+      headers: adminHeaders(),
       body: JSON.stringify({
         nama: $('#ownerDosenNama').value.trim(),
         nip: $('#ownerDosenNip').value.trim(),
@@ -265,11 +276,11 @@ async function addDosenAsOwner(event) {
 }
 
 async function approve(id) {
-  if (!ownerToken) return toast('Token owner hilang, buka ulang admin panel');
+  if (!isLecturerSession() && !ownerToken) return toast('Token owner hilang, buka ulang admin panel');
   try {
-    await apiRequest(`/approve/${id}`, { method: 'POST', headers: { 'x-owner-token': ownerToken } });
+    await apiRequest(`/approve/${id}`, { method: 'POST', headers: adminHeaders() });
     toast('Mahasiswa disetujui');
-    const list = await apiRequest('/pending-registrations', { headers: { 'x-owner-token': ownerToken } });
+    const list = await apiRequest('/pending-registrations', { headers: adminHeaders() });
     const html = list.length ? list.map((p) => `<div style="padding:8px;border-bottom:1px solid #eee"><b>${esc(p.nama)}</b> — ${esc(p.nim)}<br>${esc(p.email)}<div style="margin-top:6px"><button class="btn small" onclick="approve(${p.id})">Setujui</button></div></div>`).join('') : '<p>Tidak ada pendaftar.';
     const pendingList = $('#modal').querySelector('#pendingList');
     if (pendingList) pendingList.innerHTML = html;
@@ -318,6 +329,7 @@ function renderDashboard() {
   $('#pageContent').innerHTML = `
   <div class="welcome"><div><h1>Halo, ${esc(user.name)}! 👋</h1><p>Selamat datang di RuangKelas. Semua aktivitas pembelajaran ada di satu tempat.</p></div><div class="welcome-icon">🎓</div></div>
   ${stats()}
+  ${user.role === 'dosen' && sessionStorage.getItem('ruangKelasAuthToken') ? '<div class="section-head"><div><h3>Pendaftar Baru</h3><p>Setujui akun mahasiswa dan tambah akun dosen.</p></div><button class="btn primary" onclick="showAdminPanel()">Verifikasi Pendaftar</button></div>' : ''}
   <div class="section-head"><div><h3>Pengumuman Terbaru</h3><p>Informasi penting dari dosen</p></div><button class="btn secondary" onclick="render('announcements')">Lihat semua</button></div>
   <div class="timeline">${latest.map((a) => `<div class="item"><div class="timeline-date">${esc(a.date)}</div><div><h4>${esc(a.title)}</h4><p>${esc(a.content)}</p></div></div>`).join('')}</div>
   <div class="section-head"><div><h3>${user.role === 'dosen' ? 'Ringkasan Pengelolaan' : 'Tugas Mendatang'}</h3></div></div>
@@ -1101,7 +1113,7 @@ $('#registerForm').addEventListener('submit', async (e) => {
 
   if (password.length < 8) return toast('Password minimal 8 karakter');
   if (password !== passwordConfirm) return toast('Konfirmasi password tidak cocok');
-  if (window.isBackendReady) {
+  if (await waitForBackend()) {
     try {
       await apiRequest('/register', { method: 'POST', body: JSON.stringify({ nama: name, nim, email, password, ownerToken: ownerCode }) });
       toast(ownerCode ? 'Pendaftaran terkirim. Kode pemilik diterima (jika valid), akun akan aktif.' : 'Pendaftaran terkirim. Menunggu verifikasi pemilik/dosen.');
@@ -1121,7 +1133,7 @@ $('#loginForm').addEventListener('submit', async (e) => {
   const identifier = $('#loginName').value.trim();
   const password = $('#loginPassword').value;
 
-  if (window.isBackendReady) {
+  if (await waitForBackend()) {
     try {
       const payload = await apiRequest('/login', { method: 'POST', body: JSON.stringify({ identifier, password }) });
       sessionStorage.setItem('ruangKelasAuthToken', payload.token);
@@ -1195,17 +1207,38 @@ setAuthMode('login');
 $('#mobileMenu').onclick = () => $('.sidebar').classList.toggle('open');
 $('#notifBtn').onclick = () => toast(`${db.announcements.length} pengumuman tersedia`);
 
+// Cek koneksi server dengan beberapa percobaan, karena function bisa lambat saat pertama kali dipanggil
+// atau jaringan perangkat sedang tidak stabil. Login dan pendaftaran menunggu hasil cek ini.
 window.isBackendReady = false;
-fetch(`${API_BASE}/health`)
-  .then(async (res) => {
-    const payload = await res.json().catch(() => null);
-    window.isBackendReady = !!payload && payload.status === 'ok';
-    if (window.isBackendReady) {
-      return;
+let backendCheck = null;
+
+async function checkBackend(attempts = 3) {
+  let lastMessage = 'Server tidak tersedia. Periksa koneksi internet lalu muat ulang halaman.';
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+      const payload = await res.json().catch(() => null);
+      if (payload && payload.status === 'ok') return true;
+      lastMessage = payload?.message || lastMessage;
+    } catch {
+      // Coba lagi setelah jeda singkat.
     }
-    toast(payload?.message || 'Database tidak tersedia. Aplikasi berjalan dalam mode lokal.');
-  })
-  .catch(() => {
-    window.isBackendReady = false;
-    toast('Server tidak tersedia. Aplikasi berjalan dalam mode lokal.');
-  });
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+  }
+  toast(lastMessage);
+  return false;
+}
+
+function waitForBackend() {
+  if (window.isBackendReady) return Promise.resolve(true);
+  if (!backendCheck) {
+    backendCheck = checkBackend().then((ready) => {
+      window.isBackendReady = ready;
+      backendCheck = null;
+      return ready;
+    });
+  }
+  return backendCheck;
+}
+
+waitForBackend();
