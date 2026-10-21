@@ -39,7 +39,13 @@ function getSubmissionStore() {
 // SELECT mengembalikan [rows]; perintah lain mengembalikan [{ affectedRows, insertId }].
 let database;
 async function getDb() {
-  if (!database) database = getDatabase();
+  if (!database) {
+    const connectionString = process.env.NETLIFY_DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('NETLIFY_DATABASE_URL belum diatur. Salin connection string dari Netlify Database dan simpan di environment variables situs.');
+    }
+    database = getDatabase({ connectionString });
+  }
   return {
     async execute(text, params = []) {
       let index = 0;

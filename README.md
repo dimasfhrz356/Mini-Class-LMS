@@ -12,14 +12,16 @@ Aplikasi kelas mini untuk mahasiswa dan dosen. Seluruh aplikasi (frontend, API, 
 - **Sesi login & kode reset password**: disimpan di database, sehingga berlaku di semua perangkat.
 
 ## Pengaturan wajib di Netlify
-Buka **Project configuration → Environment variables**, lalu tambahkan:
+1. Buat/aktifkan **Netlify Database** untuk situs ini. Database memakai PostgreSQL; penggunaan compute dan bandwidth dapat mengonsumsi credit, jadi cek usage di dashboard.
+2. Di dashboard database, pilih branch production dan salin connection string-nya. Buka **Project configuration → Environment variables** pada situs Netlify, lalu tambahkan:
 
 | Variable | Keterangan |
 | --- | --- |
+| `NETLIFY_DATABASE_URL` | **Wajib.** Connection string dari branch production Netlify Database. Perlakukan sebagai rahasia. |
 | `OWNER_TOKEN` | **Wajib.** Teks rahasia yang panjang dan acak. Dipakai untuk membuat akun dosen pertama dan menyetujui pendaftar. Jangan dibagikan. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Opsional, untuk fitur reset password lewat email dan notifikasi persetujuan. |
 
-Setelah menambah atau mengubah variable, jalankan ulang deploy (**Deploys → Trigger deploy**).
+3. Setelah menambah atau mengubah variable, jalankan ulang deploy (**Deploys → Trigger deploy**).
 
 ## Langkah pertama setelah deploy
 1. Buka aplikasi, klik **Admin: Verifikasi Pendaftar** di halaman login, lalu masukkan `OWNER_TOKEN`.
