@@ -1,21 +1,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const apiBaseUrl = process.env.API_BASE_URL;
-if (!apiBaseUrl) {
-  throw new Error('Atur API_BASE_URL ke URL backend Railway, termasuk akhiran /api.');
-}
+// Secara default frontend memakai API Netlify Functions di domain yang sama (/api).
+// API_BASE_URL hanya diperlukan jika backend dijalankan di layanan lain.
+const apiBaseUrl = process.env.API_BASE_URL || '/api';
+if (apiBaseUrl !== '/api') {
+  let parsedApiUrl;
+  try {
+    parsedApiUrl = new URL(apiBaseUrl);
+  } catch {
+    throw new Error('API_BASE_URL harus berupa URL backend yang valid.');
+  }
 
-let parsedApiUrl;
-try {
-  parsedApiUrl = new URL(apiBaseUrl);
-} catch {
-  throw new Error('API_BASE_URL harus berupa URL backend yang valid.');
-}
-
-if (parsedApiUrl.protocol !== 'https:' || parsedApiUrl.pathname.replace(/\/+$/, '') !== '/api'
-  || parsedApiUrl.search || parsedApiUrl.hash || parsedApiUrl.username || parsedApiUrl.password) {
-  throw new Error('API_BASE_URL harus memakai HTTPS dan berformat https://domain-backend/api.');
+  if (parsedApiUrl.protocol !== 'https:' || parsedApiUrl.pathname.replace(/\/+$/, '') !== '/api'
+    || parsedApiUrl.search || parsedApiUrl.hash || parsedApiUrl.username || parsedApiUrl.password) {
+    throw new Error('API_BASE_URL harus memakai HTTPS dan berformat https://domain-backend/api.');
+  }
 }
 
 const projectDirectory = path.resolve(__dirname, '..');
@@ -29,4 +29,4 @@ fs.writeFileSync(
   `window.RUANGKELAS_API_BASE = ${JSON.stringify(apiBaseUrl.replace(/\/+$/, ''))};\n`
 );
 
-console.log(`Netlify build selesai; API diarahkan ke ${parsedApiUrl.origin}/api`);
+console.log(`Netlify build selesai; API diarahkan ke ${apiBaseUrl}`);

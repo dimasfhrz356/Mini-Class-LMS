@@ -1,6 +1,6 @@
 ﻿const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
-const API_BASE = window.RUANGKELAS_API_BASE || 'http://localhost:3000/api';
+const API_BASE = window.RUANGKELAS_API_BASE || '/api';
 
 const defaultDB = {
   courses: [
@@ -229,9 +229,38 @@ async function showAdminPanel() {
 
   try {
     const list = await apiRequest('/pending-registrations', { headers: { 'x-owner-token': ownerToken } });
-    openModal(`<div class="modal-head"><h3>Daftar Pendaftar (Pending)</h3><button class="close" onclick="closeModal()">✕</button></div><div id="pendingList">${list.length ? list.map((p) => `<div style="padding:8px;border-bottom:1px solid #eee"><b>${esc(p.nama)}</b> — ${esc(p.nim)}<br>${esc(p.email)}<div style="margin-top:6px"><button class="btn small" onclick="approve(${p.id})">Setujui</button></div></div>`).join('') : '<p>Tidak ada pendaftar.'}</div>`);
+    openModal(`<div class="modal-head"><h3>Daftar Pendaftar (Pending)</h3><button class="close" onclick="closeModal()">✕</button></div><div id="pendingList">${list.length ? list.map((p) => `<div style="padding:8px;border-bottom:1px solid #eee"><b>${esc(p.nama)}</b> — ${esc(p.nim)}<br>${esc(p.email)}<div style="margin-top:6px"><button class="btn small" onclick="approve(${p.id})">Setujui</button></div></div>`).join('') : '<p>Tidak ada pendaftar.'}</div>
+      <h3 style="margin-top:18px">Tambah Akun Dosen</h3>
+      <form id="ownerDosenForm" class="auth-form">
+        <input id="ownerDosenNama" required maxlength="100" placeholder="Nama dosen">
+        <input id="ownerDosenNip" required maxlength="30" placeholder="NIP">
+        <input id="ownerDosenEmail" type="email" required maxlength="100" placeholder="Email">
+        <input id="ownerDosenPassword" type="password" minlength="8" required autocomplete="new-password" placeholder="Password (minimal 8 karakter)">
+        <button class="btn primary full" type="submit">Simpan dosen</button>
+      </form>`);
+    $('#ownerDosenForm').onsubmit = addDosenAsOwner;
   } catch (error) {
     toast(error.message || 'Gagal memuat daftar pendaftar');
+  }
+}
+
+async function addDosenAsOwner(event) {
+  event.preventDefault();
+  try {
+    await apiRequest('/dosen', {
+      method: 'POST',
+      headers: { 'x-owner-token': ownerToken },
+      body: JSON.stringify({
+        nama: $('#ownerDosenNama').value.trim(),
+        nip: $('#ownerDosenNip').value.trim(),
+        email: $('#ownerDosenEmail').value.trim(),
+        password: $('#ownerDosenPassword').value,
+      }),
+    });
+    toast('Akun dosen berhasil dibuat');
+    $('#ownerDosenForm').reset();
+  } catch (error) {
+    toast(error.message || 'Gagal menambahkan dosen');
   }
 }
 
@@ -577,7 +606,7 @@ function submitModal(taskId) {
 async function submitTask(taskId) {
   const f = $('#fFile').files[0];
   if (!f) return toast('Pilih file terlebih dahulu');
-  if (f.size > 5 * 1024 * 1024) return toast('Ukuran file maksimal 5 MB');
+  if (f.size > 4 * 1024 * 1024) return toast('Ukuran file maksimal 4 MB');
   if (!window.isBackendReady || !user.id) {
     return toast('Server dan akun mahasiswa diperlukan untuk mengumpulkan file');
   }

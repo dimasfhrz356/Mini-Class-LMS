@@ -17,3 +17,6 @@ dist/
 /cara konfir.txt
 /contoh akun dosen.txt
 /login_before.txt
+
+# Local Netlify folder
+.netlify
