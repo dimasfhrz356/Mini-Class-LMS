@@ -1,1 +1,1 @@
-window.RUANGKELAS_API_BASE = '';
+window.RUANGKELAS_API_BASE = '/api';
