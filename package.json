@@ -1,0 +1,33 @@
+{
+  "name": "ruangkelas-mysql",
+  "version": "1.0.0",
+  "description": "Backend MySQL untuk relasi mahasiswa dan dosen",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build:netlify": "node scripts/build-netlify.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "mysql",
+    "express",
+    "mahasiswa",
+    "dosen"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.4.0",
+    "bcryptjs": "^3.0.2",
+    "nodemailer": "^10.1.7",
+    "express-rate-limit": "^6.8.0",
+    "helmet": "^7.0.0"
+  }
+}
