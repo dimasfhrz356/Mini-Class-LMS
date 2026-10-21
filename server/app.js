@@ -98,8 +98,10 @@ async function getAuthSession(token) {
 }
 
 app.use('/api', async (req, res, next) => {
-  const ownerPath = req.path === '/pending-registrations' || /^\/approve\/\d+$/.test(req.path)
-    || (req.path === '/dosen' && req.method === 'POST' && isOwnerRequest(req));
+  // Pemilik (OWNER_TOKEN) boleh tanpa login; selain itu verifikasi pendaftar memerlukan sesi dosen.
+  const ownerPath = isOwnerRequest(req) && (req.path === '/pending-registrations'
+    || /^\/approve\/\d+$/.test(req.path)
+    || (req.path === '/dosen' && req.method === 'POST'));
   if ((req.path === '/health' && (req.method === 'GET' || req.method === 'HEAD'))
     || publicApiPaths.has(req.path)
     || ownerPath) {
@@ -108,6 +110,12 @@ app.use('/api', async (req, res, next) => {
 
   const authorization = req.get('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token && (req.query.token || req.headers['x-owner-token'])) {
+    if (!process.env.OWNER_TOKEN) {
+      return res.status(503).json({ message: 'OWNER_TOKEN belum diatur di environment variable Netlify. Atur terlebih dahulu lalu deploy ulang.' });
+    }
+    return res.status(403).json({ message: 'Token owner tidak valid' });
+  }
   let session;
   try {
     session = await getAuthSession(token);
@@ -122,7 +130,8 @@ app.use('/api', async (req, res, next) => {
   req.authToken = token;
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     if (session.role === 'mahasiswa'
-      && (req.path === '/mahasiswa' || /^\/dosen\/\d+\/mahasiswa$/.test(req.path))) {
+      && (req.path === '/mahasiswa' || req.path === '/pending-registrations'
+        || /^\/dosen\/\d+\/mahasiswa$/.test(req.path))) {
       return res.status(403).json({ message: 'Data ini hanya dapat diakses oleh dosen' });
     }
     const studentRelation = req.path.match(/^\/mahasiswa\/(\d+)\/dosen$/);
@@ -679,12 +688,9 @@ app.post('/api/change-password', async (req, res) => {
   }
 });
 
-// New: list pending registrations (owner only via OWNER_TOKEN)
+// Daftar pendaftar pending (pemilik via OWNER_TOKEN atau dosen yang login; dicek di middleware)
 app.get('/api/pending-registrations', async (req, res) => {
   try {
-    const token = req.query.token || req.headers['x-owner-token'];
-    if (!token || token !== process.env.OWNER_TOKEN) return res.status(403).json({ message: 'Token owner tidak valid' });
-
     const db = await getDb();
     const [rows] = await db.execute('SELECT id, nama, nim, email, created_at FROM mahasiswa WHERE approved = 0 ORDER BY created_at ASC');
     res.json(rows);
@@ -693,12 +699,9 @@ app.get('/api/pending-registrations', async (req, res) => {
   }
 });
 
-// New: approve a mahasiswa (owner only)
+// Setujui mahasiswa (pemilik atau dosen yang login)
 app.post('/api/approve/:id', async (req, res) => {
   try {
-    const token = req.query.token || req.headers['x-owner-token'];
-    if (!token || token !== process.env.OWNER_TOKEN) return res.status(403).json({ message: 'Token owner tidak valid' });
-
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ message: 'ID tidak valid' });
 
